@@ -88,7 +88,7 @@ Texts with fewer than 3 sentences get a neutral 0.5 for spread.
 **Where it lives:** `scoring.py::combine_signals` (constants in `config.py`: `WEIGHT_MODEL_SIGNAL`, `WEIGHT_STYLE_SIGNAL`, `DISAGREEMENT_GAP`)
 
 **A case where my two signals split, and what my rule does with it:**
-A pasted-quotation attack (QP01: an AI paragraph about volunteering, with a chatty neighbour's quote added at the end) scored model 0.798 (very predictable) but style 0.000, because the quote brought in contractions, a dash and an uneven sentence. The weighted average is 0.479. The gap is 0.80, so the cap also applies, and it lands as **unsure**. The rule doing exactly what I meant still lets that AI text escape an AI label, and I'd rather lose that one than accuse someone on a single signal.
+One of my calibration texts was an AI paragraph about volunteering with a chatty neighbour's quote pasted on the end. It scored model 0.798 (very predictable) but style 0.000, because the quote brought in contractions, a dash and an uneven sentence. Its weighted average is 0.479. The gap is 0.80, so the cap also applies, and it lands as **unsure**. The rule doing exactly what I meant still lets that AI text escape an AI label, and I'd rather lose that one than accuse someone on a single signal.
 
 
 ---
@@ -308,16 +308,16 @@ that produced it:
 
      SUBMISSION CHECKLIST — unit 7
 
-       [ ] criteria.md has five numbered criteria, each naming a target
-       [ ] Each has a reason underneath
-       [ ] POST /submit returns content_id, guess, confidence, label,
+       [x] criteria.md has five numbered criteria, each naming a target
+       [x] Each has a reason underneath
+       [x] POST /submit returns content_id, guess, confidence, label,
            model_score and style_score
-       [ ] Two signals that measure DIFFERENT things, each with a named blind spot
-       [ ] Three label variants, all reachable, written out in full
-       [ ] POST /appeal changes status and writes to the log
-       [ ] Signals and Scoring names scoring.py::combine_signals
-       [ ] Sample Run: a submission AND an appeal, as pasted text
-       [ ] At least four new commits
+       [x] Two signals that measure DIFFERENT things, each with a named blind spot
+       [x] Three label variants, all reachable, written out in full
+       [x] POST /appeal changes status and writes to the log
+       [x] Signals and Scoring names scoring.py::combine_signals
+       [x] Sample Run: a submission AND an appeal, as pasted text
+       [x] At least four new commits
        [ ] Repository URL submitted — WRITE IT DOWN
 
      SUBMISSION CHECKLIST — unit 8
