@@ -199,17 +199,67 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
-    payload = request.get_json(silent=True) or {}
+    import detector
+    import scoring
+    import stylometry
 
-    # TODO: delete this and build the route.
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _reject("unknown", "body_not_json_object",
+                       "Send a JSON object like {\"text\": \"...\", \"creator_id\": \"...\"}.")
+
+    creator_id = payload.get("creator_id")
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        creator_id = "anonymous"
+
+    text = payload.get("text")
+    if not isinstance(text, str):
+        return _reject(creator_id, "text_missing_or_not_string",
+                       "The `text` field is required and must be a string.")
+    text = text.strip()
+    if len(stylometry.words(text)) < config.MIN_WORDS:
+        return _reject(creator_id, "text_too_short",
+                       f"Please send at least {config.MIN_WORDS} words — there isn't "
+                       f"enough here to say anything about.")
+    if len(text) > config.MAX_TEXT_CHARS:
+        return _reject(creator_id, "text_too_long",
+                       f"Please send at most {config.MAX_TEXT_CHARS:,} characters.", 413)
+
+    try:
+        model_score = detector.model_signal(text)
+    except ValueError as exc:
+        return _reject(creator_id, "text_unscorable", str(exc))
+    style_score = stylometry.style_signal(text)
+    combined = round(scoring.combine_signals(model_score, style_score), 4)
+    guess, label = scoring.score_to_label(combined)
+
+    content_id = uuid.uuid4().hex[:12]
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess=guess,
+        model_score=model_score,
+        style_score=style_score,
+        combined_score=combined,
+        label=label,
+        status="decided",
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": combined,
+        "label": label,
+        "model_score": model_score,
+        "style_score": style_score,
+        "status": "decided",
+    })
+
+
+def _reject(creator_id: str, reason: str, message: str, code: int = 400):
+    """A refused request still leaves a trace in the log."""
+    audit.log_rejection(creator_id=creator_id, reason=reason, http_status=code)
+    return jsonify({"error": reason, "message": message}), code
 
 
 @app.post("/appeal")
@@ -232,14 +282,36 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
 
-    # TODO: delete this and build the route.
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
+    if not isinstance(content_id, str) or not content_id.strip():
+        return jsonify({"error": "content_id_missing",
+                        "message": "Include the content_id from your submission."}), 400
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return jsonify({"error": "reasoning_missing",
+                        "message": "Tell us briefly why you think the label is wrong."}), 400
+
+    history = audit.entries_for(content_id.strip())
+    decision = next((e for e in history if e.get("status") == "decided"), None)
+    if decision is None:
+        return jsonify({"error": "content_not_found",
+                        "message": f"No submission with content_id '{content_id}'."}), 404
+
+    audit.log_appeal(content_id=decision["content_id"],
+                     creator_id=decision.get("creator_id", "unknown"),
+                     reasoning=reasoning.strip())
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": decision["content_id"],
+        "status": "under_review",
+        "original_label": decision.get("label"),
+        "message": "Thanks — your appeal is recorded and a person will review this "
+                   "piece. The label won't be used against you while it's under review.",
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────
