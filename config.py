@@ -85,9 +85,7 @@ DISAGREEMENT_GAP = 0.4
 # that decide who pays for it.
 
 HUMAN_THRESHOLD = 0.35
-# Unit 8 improvement: raised from 0.65. At 0.65, 3 of 10 pieces of my own
-# writing and all 6 plain-human attack texts were labelled AI. See README.
-AI_THRESHOLD = 0.85
+AI_THRESHOLD = 0.65
 
 # ⚠️ One thing that catches people out in Milestone 5. A weighted average can
 # only land between its two inputs — so while `style_signal` is still the stub
@@ -101,16 +99,16 @@ AI_THRESHOLD = 0.85
 
 
 # ─── Rate limiting (UNIT 8) ──────────────────────────────────────────────────
-# On by default since unit 8. Set AI201_RATE_LIMITS=0 to switch it off.
+# Off in unit 7. You turn it on and choose the numbers in unit 8, Milestone 1.
 #
 # Think about two people: a real writer submitting their own work a few times
 # an hour, and a script sending a thousand variations to map your thresholds.
 # Your README has to say why your numbers and not others.
 
-RATE_LIMITING_ENABLED = os.getenv("AI201_RATE_LIMITS", "1") == "1"
+RATE_LIMITING_ENABLED = os.getenv("AI201_RATE_LIMITS", "0") == "1"
 
-RATE_LIMIT_PER_MINUTE = 5
-RATE_LIMIT_PER_DAY = 50
+RATE_LIMIT_PER_MINUTE = 10
+RATE_LIMIT_PER_DAY = 200
 
 # Flask-Limiter warns loudly without this. In-memory is right for one laptop
 # and wrong for anything real — a restart forgets every count, and two copies

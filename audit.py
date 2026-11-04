@@ -86,11 +86,6 @@ def log_appeal(content_id: str, creator_id: str, reasoning: str) -> dict:
         "timestamp": _now(),
         "content_id": content_id,
         "creator_id": creator_id,
-        "guess": None,
-        "model_score": None,
-        "style_score": None,
-        "combined_score": None,
-        "label": None,
         "event": "appeal",
         "status": "under_review",
         "reasoning": reasoning,
@@ -107,17 +102,9 @@ def log_rejection(creator_id: str, reason: str, **extra) -> dict:
     thousand requests that got a 429 and left no trace look exactly like a
     quiet afternoon.
     """
-    # All nine fields, nulls included, so a rejection has the same shape as a
-    # decision and nothing reading the log has to special-case it.
     return _append({
         "timestamp": _now(),
-        "content_id": None,
         "creator_id": creator_id,
-        "guess": None,
-        "model_score": None,
-        "style_score": None,
-        "combined_score": None,
-        "label": None,
         "event": "rejected",
         "status": "rejected",
         "reason": reason,
