@@ -46,11 +46,11 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. It must name a number. -->
 
-
+Of 10 pieces of writing I wrote myself, **at most 1** is labelled high-confidence AI in any single trial.
 
 **Why this target:**
 
-
+On a writing site a wrong accusation costs the writer far more than a missed detection costs the site, so false positives get the tightest target. One in ten is strict but not zero, because perplexity on short plain writing is genuinely noisy.
 
 ---
 
@@ -58,11 +58,11 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. -->
 
-
+All three labels are reachable: across my label-coverage inputs, **each of the three labels (human, unsure, AI) appears at least once** in every trial.
 
 **Why this target:**
 
-
+A label no score can produce is a gap in the ranges, and the whole point of an "unsure" band is that it actually gets used. If any label is missing in any trial, the thresholds or the signals are broken.
 
 ---
 
@@ -70,11 +70,11 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. -->
 
-
+Score spread: the mean combined score of my clearly-AI inputs is **at least 0.30 higher** than the mean combined score of my clearly-human inputs, in every trial.
 
 **Why this target:**
 
-
+If clear cases don't separate by about a third of the scale, the thresholds are just slicing noise and the labels mean nothing. 0.30 is roughly the width of my unsure band, so clear cases should land on opposite sides of it.
 
 ---
 
@@ -82,11 +82,11 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. -->
 
-
+Bad input never crashes the service: **0 of 5** malformed requests (empty text, missing text, null text, non-string text, enormous text) return a 5xx, and **all 5** return a 4xx with a JSON error message.
 
 **Why this target:**
 
-
+A crash on malformed input is one of the most common real failures and there is no threshold that makes it acceptable. Every bad request should get a clear 4xx so the caller knows what they did wrong.
 
 ---
 
@@ -94,11 +94,11 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. -->
 
-
+The appeal path always works: for **5 of 5** submissions appealed, `/appeal` returns 200 with status `under_review` and the audit log gains an appeal entry for that content_id; an appeal against an unknown content_id returns **404** every time.
 
 **Why this target:**
 
-
+The appeal is the only thing between a wrong accusation and nothing at all, so it has to work every single time, not most of the time. A typo'd id silently "succeeding" would be worse than an error, so that case is tested too.
 
 ---
 
