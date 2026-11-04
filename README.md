@@ -170,7 +170,7 @@ An appeal against a `content_id` that doesn't exist returns `404 content_not_fou
 
 **Moment 1**
 
-- *What I asked for:* I used Claude Code (an AI coding agent) to implement the three style measures and the `/submit` route from the starter's TODOs.
+- *What I asked for:* I used Claude to implement the three style measures and the `/submit` route from the starter's TODOs.
 - *What came back:* Working code: a sentence-length CV, a plain type-token ratio and a count of all punctuation.
 - *What I changed:* Plain TTR falls as text gets longer, so it was swapped for a 50-word moving-average TTR. Punctuation was narrowed to "expressive" marks (no full stops or commas), because everyone uses those. The ramp endpoints were then set from the calibration scores, not guessed.
 
