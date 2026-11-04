@@ -103,10 +103,10 @@ A pasted-quotation attack (QP01: an AI paragraph about volunteering, with a chat
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
 | high-confidence human | 0.00 – 0.35 | We think this was most likely written by a person. |
-| unsure | 0.35 – 0.65 | We can't tell either way for this piece. Plenty of people write in a style our checks find hard to read, so this isn't a judgement about you or your work, and nothing happens because of it. |
-| high-confidence AI | 0.65 – 1.00 | This piece has a lot in common with AI-generated writing, and both of our checks agree on that. This is an automated estimate, not proof. If you wrote it yourself, you can appeal and a person will review it. |
+| unsure | 0.35 – 0.85 *(0.35 – 0.65 in unit 7)* | We can't tell either way for this piece. Plenty of people write in a style our checks find hard to read, so this isn't a judgement about you or your work, and nothing happens because of it. |
+| high-confidence AI | 0.85 – 1.00 *(0.65 – 1.00 in unit 7)* | This piece has a lot in common with AI-generated writing, and both of our checks agree on that. This is an automated estimate, not proof. If you wrote it yourself, you can appeal and a person will review it. |
 
-All three are reachable. In calibration, lively human text scored 0.17–0.28 (human), my own plain writing mostly 0.49–0.58 (unsure), and generated text 0.76–0.90 (AI).
+All three are reachable. In calibration, lively human text scored 0.17–0.28 (human), my own plain writing mostly 0.49–0.58 (unsure), and generated text 0.76–0.90 (AI). After the unit 8 threshold change, the AI label is still reachable (the AI controls score 0.86, and repeated boilerplate scores 0.998), but much harder to reach. See **The Improvement**.
 
 **Why I worded the "unsure" one this way:**
 <!-- It's the hardest of the three. It has to admit uncertainty without
@@ -186,7 +186,7 @@ An appeal against a `content_id` that doesn't exist returns `404 content_not_fou
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 50 per day
 
 **Why those numbers and not others:**
 <!-- Think about two people: a real writer submitting their own work a few
@@ -194,17 +194,19 @@ An appeal against a `content_id` that doesn't exist returns `404 content_not_fou
      thresholds. Your numbers have to be liveable for the first and hostile to
      the second. -->
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+A real writer submits a few pieces an hour, maybe a handful of quick re-tries after an edit, so 5 a minute never touches them. 50 a day is several times more than any honest writer needs. Someone probing my thresholds needs hundreds of near-identical variations, and 50 a day per caller makes that take weeks rather than seconds.
+
+**What a caller counts as:** Per `creator_id`, falling back to the IP address when there isn't one (the key function in `app.py`). This is fair to a household sharing one IP, but a script that invents a new `creator_id` for every request gets a fresh limit each time. The attack set shows this: 45 attacks from 45 ids never tripped it. A real deployment would add a second, looser per-IP limit on top.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
 ```
-
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
 ```
+
+(`results/flood_2026-11-04_0004.md`). Each 429 is logged as a `rejected` entry with `reason: "rate_limited"` (see FL06 below).
 
 ---
 
@@ -213,19 +215,75 @@ can look like one. -->
 <!-- Every attack with its outcome and a held-or-broke mark.
      `run_attacks.py --label before` produces the table. -->
 
+> **About the attack set.** The staff attack set wasn't in the starter repo, so I built one in the same format: `attack_set/attacks.csv` and `attack_set/attacks_malformed_requests.csv`, 45 attacks in 13 families. It runs with `python run_attacks.py --set attack_set`. If the course set is released, it drops into the same command.
 
+Full report: `results/attack_run_2026-11-04_0005_before.md`. Thresholds at this point: human ≤ 0.35, AI ≥ 0.65.
+
+**How I judged them:** an evasion attack (AI text in disguise) **held** if it was still labelled AI and **broke** if it escaped to unsure or human. A false-positive attack (real human writing) **held** if it was *not* labelled AI. A malformed request held if it got a clean 4xx (or was handled safely). The flood held if it hit 429.
+
+| ID | Family | Status | Guess | Score | Verdict |
+|---|---|---|---|---|---|
+| CA01 | control_ai | 200 | ai | 0.859 | HELD |
+| CA02 | control_ai | 200 | ai | 0.856 | HELD |
+| CH01 | control_human | 200 | human | 0.276 | HELD |
+| EV01 | evasion_typos | 200 | ai | 0.700 | HELD |
+| EV02 | evasion_typos | 200 | unsure | 0.601 | BROKE |
+| EV03 | evasion_typos | 200 | ai | 0.652 | HELD |
+| EV04 | evasion_casual | 200 | unsure | 0.424 | BROKE |
+| EV05 | evasion_casual | 200 | unsure | 0.543 | BROKE |
+| SC01 | sentence_chop | 200 | unsure | 0.517 | BROKE |
+| SC02 | sentence_chop | 200 | ai | 0.666 | HELD |
+| PS01 | punctuation_stuffing | 200 | unsure | 0.372 | BROKE |
+| PS02 | punctuation_stuffing | 200 | unsure | 0.507 | BROKE |
+| QP01 | quote_padding | 200 | unsure | 0.479 | BROKE |
+| QP02 | quote_padding | 200 | unsure | 0.636 | BROKE |
+| HG01 | homoglyph | 200 | unsure | 0.602 | BROKE |
+| HG02 | homoglyph | 200 | ai | 0.805 | HELD |
+| RP01 | repetition | 200 | ai | 0.998 | HELD |
+| SH01 | short_text | 400 | — | — | HELD (refused, 19 words) |
+| SH02 | short_text | 400 | — | — | HELD |
+| FP01 | false_positive | 200 | ai | 0.811 | **BROKE** |
+| FP02 | false_positive | 200 | ai | 0.809 | **BROKE** |
+| FP03 | false_positive | 200 | ai | 0.792 | **BROKE** |
+| FP04 | false_positive | 200 | ai | 0.730 | **BROKE** |
+| FP05 | false_positive | 200 | ai | 0.841 | **BROKE** |
+| FP06 | false_positive | 200 | ai | 0.842 | **BROKE** |
+| MR01 | malformed_body (empty body) | 400 | — | — | HELD |
+| MR02 | malformed_body (bad JSON) | 400 | — | — | HELD |
+| MR03 | malformed_body (JSON list) | 400 | — | — | HELD |
+| MR04 | malformed_body (text is a list) | 400 | — | — | HELD |
+| MR05 | malformed_body (whitespace text) | 400 | — | — | HELD |
+| MR06 | malformed_body (creator_id is an object) | 200 | ai | 0.859 | HELD (scored as `anonymous`, no crash) |
+| MR07 | malformed_body (54 KB text) | 413 | — | — | HELD |
+| MR08 | malformed_body (text/plain) | 400 | — | — | HELD |
+| FL01–FL05 | flood_same_creator | 200 ×5 | ai | 0.843 | — |
+| FL06–FL12 | flood_same_creator | 429 ×7 | — | — | HELD |
+
+**Totals:** 0 crashes or 5xx. 15 broke: 9 evasions and all 6 false positives.
 
 **Ten audit log entries from the run**
 
 <!-- Choose entries that show the interesting failures, not the ten easiest. -->
 
-```json
+From `logs/audit.jsonl` (also in `results/audit_extract_before.json`). Label text shortened to `…` for space; the full text is in the log.
 
+```json
+{"timestamp": "2026-11-04T05:05:32+00:00", "content_id": "90dbb951129e", "creator_id": "attacker_FP01", "guess": "ai", "model_score": 0.8724, "style_score": 0.7184, "combined_score": 0.8108, "label": "This piece has a lot in common with AI-generated writing…", "status": "decided"}
+{"timestamp": "2026-11-04T05:05:32+00:00", "content_id": "2437bec2a444", "creator_id": "attacker_FP05", "guess": "ai", "model_score": 0.88, "style_score": 0.782, "combined_score": 0.8408, "label": "This piece has a lot in common with AI-generated writing…", "status": "decided"}
+{"timestamp": "2026-11-04T05:05:32+00:00", "content_id": "99054b402772", "creator_id": "attacker_FP04", "guess": "ai", "model_score": 0.8344, "style_score": 0.5739, "combined_score": 0.7302, "label": "This piece has a lot in common with AI-generated writing…", "status": "decided"}
+{"timestamp": "2026-11-04T05:05:29+00:00", "content_id": "33c958351f39", "creator_id": "attacker_EV04", "guess": "unsure", "model_score": 0.7013, "style_score": 0.0094, "combined_score": 0.4245, "label": "We can't tell either way for this piece…", "status": "decided"}
+{"timestamp": "2026-11-04T05:05:30+00:00", "content_id": "500af70fe3d5", "creator_id": "attacker_PS01", "guess": "unsure", "model_score": 0.6108, "style_score": 0.0138, "combined_score": 0.372, "label": "We can't tell either way for this piece…", "status": "decided"}
+{"timestamp": "2026-11-04T05:05:31+00:00", "content_id": "904e041fceff", "creator_id": "attacker_QP01", "guess": "unsure", "model_score": 0.7984, "style_score": 0.0, "combined_score": 0.479, "label": "We can't tell either way for this piece…", "status": "decided"}
+{"timestamp": "2026-11-04T05:05:31+00:00", "content_id": "c62da59ee3c7", "creator_id": "attacker_HG01", "guess": "unsure", "model_score": 0.3842, "style_score": 0.9274, "combined_score": 0.6015, "label": "We can't tell either way for this piece…", "status": "decided"}
+{"timestamp": "2026-11-04T05:05:29+00:00", "content_id": "025133b40d32", "creator_id": "attacker_EV01", "guess": "ai", "model_score": 0.6717, "style_score": 0.7422, "combined_score": 0.6999, "label": "This piece has a lot in common with AI-generated writing…", "status": "decided"}
+{"timestamp": "2026-11-04T05:05:33+00:00", "content_id": null, "creator_id": "attacker_MR07", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "text_too_long", "http_status": 413}
+{"timestamp": "2026-11-04T05:05:34+00:00", "content_id": null, "creator_id": "flood_bot", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 ```
 
 **The single worst outcome** — the one I'd least want to explain to a writer
 whose work got caught by it:
 
+FP01: a paragraph by someone who came to the country three years ago, writing in simple English about being proud of learning it, labelled high-confidence AI at 0.81. Both signals agreed, so my disagreement safeguard never kicked in. It's the writer with the least room to argue back being told their own story about learning the language looks machine-made.
 
 
 ---
@@ -236,17 +294,25 @@ whose work got caught by it:
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. My own writing labelled AI | ≤ 1 of 10 | 3 of 10 | 3 of 10 | 3 of 10 | **MISS** |
+| 2. All three labels reached | each label ≥ 1 per trial | ai, human, unsure | ai, human, unsure | ai, human, unsure | MET |
+| 3. AI mean − human mean | ≥ 0.30 | 0.602 | 0.602 | 0.602 | MET |
+| 4. Bad input: 5xx / clean 4xx | 0 / 5 of 5 | 0 / 5 | 0 / 5 | 0 / 5 | MET |
+| 5. Appeals work + unknown id 404 | 6 of 6 | 6 / 6 | 6 / 6 | 6 / 6 | MET |
+
+Criteria 1–4 come from `run_eval.py --label before` (`results/run_2026-11-04_0005_before.md`). Criterion 5 can't be sent as plain text, so I extended the test with `check_appeals.py`: it submits five pieces, appeals each one, checks the log, then appeals a bogus id. Output is in `results/appeals_2026-11-04_0005_before.md`. The three trials are identical because GPT-2 scoring here is deterministic (no sampling), so repeats only guard against flakiness in the route.
 
 **Real output from one trial**, pasted as text, naming the file and function
 that produced it:
 
-```json
+Produced by `run_eval.py::main` against `app.py::submit`, scenario "my own writing", trial 1 (first 3 of 10 results, label text shortened):
 
+```json
+[
+  {"status": 200, "guess": "unsure", "confidence": 0.5701, "model_score": 0.7051, "style_score": 0.3675, "label": "We can't tell either way for this piece…", "sent": "I started learning to code last year because I wanted to build a littl"},
+  {"status": 200, "guess": "unsure", "confidence": 0.5063, "model_score": 0.7631, "style_score": 0.1212, "label": "We can't tell either way for this piece…", "sent": "My favorite place in the city is the library on the corner near my old"},
+  {"status": 200, "guess": "ai", "confidence": 0.7097, "model_score": 0.7441, "style_score": 0.6581, "label": "This piece has a lot in common with AI-generated writing…", "sent": "Last summer I worked at a grocery store. The work was boring but the pe"}
+]
 ```
 
 **Diagnoses**
@@ -265,27 +331,77 @@ that produced it:
 
      Look for a pattern. Five failures on one signal is one problem, not five. -->
 
+**Diagnosis A: criterion 1 miss + FP01–FP06 (9 failures, one problem). Stage: signal one and signal two together, then the label mapping.**
+All nine are plain human writing: short sentences, common words, no contractions. Signal one put them at perplexity 13–27, which the logistic maps to model scores of 0.72–0.88, right next to real AI text (perplexity 7–15, scores 0.86–0.95). Signal two agreed, for two reasons: plain writers use almost no expressive punctuation (density 0–2, which scores fully AI), and their vocabulary is *less* varied than generated text (TTR 0.73–0.79 vs 0.79–0.91), so my TTR measure points the wrong way for them. Because the signals agreed, the disagreement cap never fired, and with the AI band starting at 0.65 they all became accusations.
+
+**Diagnosis B: style-only evasions, EV04, EV05, SC01, PS01, PS02, QP01 (6 broke). Stage: signal two, then the combining rule.**
+Each one changes shape, not words: contractions, `?`, dashes, parentheses, chopped sentences or a pasted quote. Punctuation density jumped to 6–20 per 100 words (for SC01, sentence spread jumped to 1.20 instead), so the style score fell to 0.00–0.19 while the model score stayed at 0.61–0.83. With style weighted at 0.4, a style score near zero takes up to 0.4 off the combined score, which put these at 0.37–0.54. The disagreement cap would have held them under the AI band anyway: every one of them has a gap over 0.4. So the safeguard I built for writers would let these through even with different weights.
+
+**Diagnosis C: model-signal evasions, EV02, QP02, HG01 (3 broke). Stage: signal one.**
+Typos (EV02), a rare-word quotation (QP02) and Cyrillic look-alike letters (HG01) all raise GPT-2's perplexity, to 48, 25 and 60. That pulled the model score down to 0.38–0.72, and QP02 missed the AI band by 0.014 (0.636). HG01 is the clearest case: the text is unreadable to the tokenizer, so model 0.38 vs style 0.93 is a split, and the cap keeps it at "unsure".
 
 
 ---
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** I raised `AI_THRESHOLD` in `config.py` from **0.65 to 0.85**. The unsure band is now 0.35–0.85. That's one line, and nothing else changed. The disagreement cap follows it automatically, since it's defined as `AI_THRESHOLD − 0.01`.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** Diagnosis A. The plain-writing false positives all scored 0.71–0.84 with *both* signals agreeing, so no rule about disagreement could help. The only stage that could stop those accusations without rebuilding a signal was the label mapping. Before committing, I compared other options offline: moving the detector midpoint from 45 to 20, dropping the backwards TTR measure, and thresholds of 0.80 and 0.85. 0.85 was the only one that took both my own writing and the false-positive set to zero AI labels.
 
 ### Attack Run — After
 
 <!-- Same format. `run_attacks.py --label after` -->
 
+Full report: `results/attack_run_2026-11-04_0007_after.md`. Scores are identical to before; only the label mapping moved.
 
+| ID | Family | Status | Guess | Score | Verdict | Changed? |
+|---|---|---|---|---|---|---|
+| CA01 | control_ai | 200 | ai | 0.859 | HELD | |
+| CA02 | control_ai | 200 | ai | 0.856 | HELD | |
+| CH01 | control_human | 200 | human | 0.276 | HELD | |
+| EV01 | evasion_typos | 200 | unsure | 0.700 | BROKE | held → broke |
+| EV02 | evasion_typos | 200 | unsure | 0.601 | BROKE | |
+| EV03 | evasion_typos | 200 | unsure | 0.652 | BROKE | held → broke |
+| EV04 | evasion_casual | 200 | unsure | 0.424 | BROKE | |
+| EV05 | evasion_casual | 200 | unsure | 0.543 | BROKE | |
+| SC01 | sentence_chop | 200 | unsure | 0.517 | BROKE | |
+| SC02 | sentence_chop | 200 | unsure | 0.666 | BROKE | held → broke |
+| PS01 | punctuation_stuffing | 200 | unsure | 0.372 | BROKE | |
+| PS02 | punctuation_stuffing | 200 | unsure | 0.507 | BROKE | |
+| QP01 | quote_padding | 200 | unsure | 0.479 | BROKE | |
+| QP02 | quote_padding | 200 | unsure | 0.636 | BROKE | |
+| HG01 | homoglyph | 200 | unsure | 0.602 | BROKE | |
+| HG02 | homoglyph | 200 | unsure | 0.805 | BROKE | held → broke |
+| RP01 | repetition | 200 | ai | 0.998 | HELD | |
+| SH01, SH02 | short_text | 400 | — | — | HELD | |
+| FP01 | false_positive | 200 | unsure | 0.811 | HELD | broke → held |
+| FP02 | false_positive | 200 | unsure | 0.809 | HELD | broke → held |
+| FP03 | false_positive | 200 | unsure | 0.792 | HELD | broke → held |
+| FP04 | false_positive | 200 | unsure | 0.730 | HELD | broke → held |
+| FP05 | false_positive | 200 | unsure | 0.841 | HELD | broke → held |
+| FP06 | false_positive | 200 | unsure | 0.842 | HELD | broke → held |
+| MR01–MR08 | malformed_body | 400 / 413 (MR06: 200) | — | — | HELD | |
+| FL01–FL12 | flood_same_creator | 200 ×5, 429 ×7 | — | — | HELD | |
+
+**Totals:** 0 crashes. 13 broke (was 15): all 6 false positives now hold, but 4 evasions that used to be caught (EV01, EV03, SC02, HG02) now get through.
+
+**Criteria after** (`results/run_2026-11-04_0007_after.md`, `results/appeals_2026-11-04_0007_after.md`):
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. My own writing labelled AI | ≤ 1 of 10 | 0 of 10 | 0 of 10 | 0 of 10 | MET (was miss) |
+| 2. All three labels reached | each ≥ 1 per trial | human, unsure only | human, unsure only | human, unsure only | **MISS** (was met) |
+| 3. AI mean − human mean | ≥ 0.30 | 0.602 | 0.602 | 0.602 | MET |
+| 4. Bad input: 5xx / clean 4xx | 0 / 5 of 5 | 0 / 5 | 0 / 5 | 0 / 5 | MET |
+| 5. Appeals work + unknown id 404 | 6 of 6 | 6 / 6 | 6 / 6 | 6 / 6 | MET |
 
 **Did it help, and how do I know:**
 
 <!-- Widening the unsure band usually fixes one problem and creates another.
      Reporting that trade honestly is worth full credit. -->
 
+It helped with what I care most about, and it cost something real. Wrong accusations went from 3/10 of my own writing and 6/6 plain-writing attacks to **0 in both**, across all three trials. But the AI label is now nearly unreachable for ordinary generated text: only 1 of my 5 clearly-AI samples (0.898) and the two controls still get it. My coverage input (0.756) now lands in unsure, so criterion 2 went from met to missed. I'm keeping criterion 2 as written rather than lowering it, since the miss is the honest cost of the change.
 
 
 ---
@@ -295,44 +411,50 @@ that produced it:
 <!-- For each attack still getting through and each criterion still missed:
      what you'd do, and why you stopped. -->
 
-
+- **Criterion 2 (label coverage) — now missed.** My own writing tops out at 0.73 and generated text starts at 0.76, so no single threshold separates them on these signals. The real fix is a better signal one: a stronger model than GPT-2, or perplexity *variance* across sentences ("burstiness") instead of the mean. I stopped because that's a rebuild of a signal, not a tuning change.
+- **Style-only evasions (EV04, EV05, SC01, PS01, PS02, QP01).** Signal two can't read, so adding contractions or dashes beats it every time. I'd cap how far any single style measure can pull the score, or drop punctuation density, which is the cheapest measure to game. I didn't, because punctuation is also what separates lively human writing from AI in my data, so removing it would raise false positives again.
+- **Model-signal evasions (EV02, QP02, HG01, HG02, EV01, EV03).** Typos and homoglyphs raise perplexity. I'd normalise text before scoring: map Cyrillic and other look-alikes to Latin, strip zero-width characters, maybe spell-correct. Normalisation is cheap and doesn't hurt real writers, so it'd be the next thing I'd do. I stopped at one change so the before/after comparison stays clean.
+- **SC02, EV01, EV03 and HG02 now escape** only because of my new threshold; they score 0.65–0.81. That's the accepted cost of the change above.
+- **Rate limiting by `creator_id` is easy to dodge** by inventing new ids. I'd add a per-IP limit alongside it.
+- **Criterion 2's evidence is thin.** It rests on one AI input. A fairer test would use several, which I'd add before re-running.
 
 **The trade I'd make if this ran for real:**
 
 <!-- Two sentences. Fewer wrong accusations means more AI text getting through.
      Say which way you'd go and WHO PAYS FOR IT. -->
 
+I'd keep the high AI threshold and accept that most AI text gets "unsure" instead of "AI", because a wrong accusation lands on one real writer, often a plain or second-language writer with the least ability to push back. The cost is paid by the site and its honest readers, who see more undetected AI text, and that cost is spread thin, which is a better place for it than on one person.
 
 
 <!-- ═════════════════════════════════════════════════════════════════════
 
      SUBMISSION CHECKLIST — unit 7
 
-       [ ] criteria.md has five numbered criteria, each naming a target
-       [ ] Each has a reason underneath
-       [ ] POST /submit returns content_id, guess, confidence, label,
+       [x] criteria.md has five numbered criteria, each naming a target
+       [x] Each has a reason underneath
+       [x] POST /submit returns content_id, guess, confidence, label,
            model_score and style_score
-       [ ] Two signals that measure DIFFERENT things, each with a named blind spot
-       [ ] Three label variants, all reachable, written out in full
-       [ ] POST /appeal changes status and writes to the log
-       [ ] Signals and Scoring names scoring.py::combine_signals
-       [ ] Sample Run: a submission AND an appeal, as pasted text
-       [ ] At least four new commits
-       [ ] Repository URL submitted — WRITE IT DOWN
+       [x] Two signals that measure DIFFERENT things, each with a named blind spot
+       [x] Three label variants, all reachable, written out in full
+       [x] POST /appeal changes status and writes to the log
+       [x] Signals and Scoring names scoring.py::combine_signals
+       [x] Sample Run: a submission AND an appeal, as pasted text
+       [x] At least four new commits
+       [x] Repository URL submitted — WRITE IT DOWN
 
      SUBMISSION CHECKLIST — unit 8
 
-       [ ] Rate limiting on /submit, with your numbers justified
-       [ ] The pasted run of status codes showing 429
-       [ ] Audit log with all nine fields, recording rejections too
-       [ ] The attack set run IN FULL, every input with an outcome
-       [ ] Ten audit log entries pasted as text
-       [ ] Five criteria across three trials
-       [ ] A diagnosis for every miss and every broken attack — stage AND mechanism
-       [ ] One improvement, with Attack Run — After
-       [ ] What's Still Broken, including the production trade
-       [ ] At least four new commits
-       [ ] The SAME repository URL as last unit
+       [x] Rate limiting on /submit, with your numbers justified
+       [x] The pasted run of status codes showing 429
+       [x] Audit log with all nine fields, recording rejections too
+       [x] The attack set run IN FULL, every input with an outcome
+       [x] Ten audit log entries pasted as text
+       [x] Five criteria across three trials
+       [x] A diagnosis for every miss and every broken attack — stage AND mechanism
+       [x] One improvement, with Attack Run — After
+       [x] What's Still Broken, including the production trade
+       [x] At least four new commits
+       [x] The SAME repository URL as last unit
 
      Do not delete and recreate this repository.
      ═════════════════════════════════════════════════════════════════════ -->
