@@ -64,8 +64,19 @@ def sentence_length_spread(text: str) -> float:
     `stdev` raises on fewer than two values. Decide what that should return
     before the attack set decides for you.
     """
-    # TODO: replace this
-    return 0.0
+    # Coefficient of variation of sentence lengths in words. 0.0 means every
+    # sentence is the same length; human prose usually sits around 0.5–0.8.
+    # Under two sentences there is no spread to measure, so return 0.0 and let
+    # style_signal treat it as "no evidence" rather than "very AI".
+    lengths = [len(words(s)) for s in sentences(text)]
+    lengths = [n for n in lengths if n > 0]
+    if len(lengths) < 2:
+        return 0.0
+    mean = statistics.mean(lengths)
+    return round(statistics.stdev(lengths) / mean, 4) if mean else 0.0
+
+
+TTR_WINDOW = 50
 
 
 def type_token_ratio(text: str) -> float:
@@ -80,8 +91,24 @@ def type_token_ratio(text: str) -> float:
     directly comparable on it, and if your test inputs vary a lot in length,
     that alone can look like a signal.
     """
-    # TODO: replace this
-    return 0.0
+    # Moving-average TTR: the mean TTR over every 50-word window. Plain TTR
+    # falls as text gets longer, so a 300-word piece and a 60-word piece would
+    # differ on length alone; averaging fixed-size windows takes that out.
+    tokens = words(text)
+    if not tokens:
+        return 0.0
+    if len(tokens) <= TTR_WINDOW:
+        return round(len(set(tokens)) / len(tokens), 4)
+    ratios = [
+        len(set(tokens[i:i + TTR_WINDOW])) / TTR_WINDOW
+        for i in range(len(tokens) - TTR_WINDOW + 1)
+    ]
+    return round(statistics.mean(ratios), 4)
+
+
+# Full stops and commas are left out: every writer uses them. These are the
+# marks that vary between writers — contractions, asides, questions, dashes.
+EXPRESSIVE_PUNCTUATION = set(";:!?()'\"-—–’“”")
 
 
 def punctuation_density(text: str) -> float:
@@ -94,8 +121,12 @@ def punctuation_density(text: str) -> float:
         more interesting than full stops, because they vary more between
         writers.
     """
-    # TODO: replace this
-    return 0.0
+    # Expressive punctuation marks per 100 words. Higher means more human.
+    tokens = words(text)
+    if not tokens:
+        return 0.0
+    count = sum(1 for ch in text if ch in EXPRESSIVE_PUNCTUATION)
+    return round(100 * count / len(tokens), 4)
 
 
 # ── Combining them ───────────────────────────────────────────────────────────
@@ -122,8 +153,22 @@ def style_signal(text: str) -> float:
     you trust it. Plain and ordinary, not formal: formal prose reads as *human*
     to signal one, and it is plain writing that gets accused.
     """
-    # TODO: replace this
-    return 0.5
+    # Each measure points "more human" when it's high, so each is flipped onto
+    # an AI-ness scale with a linear ramp between two calibration points and
+    # clipped to 0–1. The ramp ends came from the Milestone 4 calibration
+    # inputs; they're in README under Signals and Scoring.
+    def ai_ness(value, human_at, ai_at):
+        return min(max((human_at - value) / (human_at - ai_at), 0.0), 1.0)
+
+    if len(sentences(text)) >= 3:
+        spread = ai_ness(sentence_length_spread(text), human_at=0.65, ai_at=0.20)
+    else:
+        spread = 0.5  # too few sentences to say anything either way
+    variety = ai_ness(type_token_ratio(text), human_at=0.85, ai_at=0.65)
+    punct = ai_ness(punctuation_density(text), human_at=6.0, ai_at=0.5)
+
+    score = 0.45 * spread + 0.20 * variety + 0.35 * punct
+    return round(score, 4)
 
 
 if __name__ == "__main__":
@@ -139,4 +184,3 @@ if __name__ == "__main__":
     print(f"type_token_ratio         {type_token_ratio(text)}")
     print(f"punctuation_density      {punctuation_density(text)}")
     print(f"style_signal             {style_signal(text)}   (higher = more likely AI)")
-    print("\nAll zeros? These are stubs — Milestone 4 is where you build them.")

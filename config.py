@@ -47,6 +47,15 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 DETECTOR_MAX_TOKENS = 400
 
 
+# ─── Input limits ────────────────────────────────────────────────────────────
+# Fewer than this many words and neither signal means anything. More than this
+# many characters and it's not a submission, it's a payload — the model only
+# reads the first ~300 words anyway.
+
+MIN_WORDS = 20
+MAX_TEXT_CHARS = 20_000
+
+
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.
 #
@@ -54,8 +63,12 @@ DETECTOR_MAX_TOKENS = 400
 # down BEFORE you code it, and to put the numbers in your README. Whatever you
 # decide, it goes here.
 
-WEIGHT_MODEL_SIGNAL = 0.5
-WEIGHT_STYLE_SIGNAL = 0.5
+WEIGHT_MODEL_SIGNAL = 0.6
+WEIGHT_STYLE_SIGNAL = 0.4
+
+# When the two signals differ by more than this, they're treated as
+# disagreeing, and disagreement is never allowed to produce an AI label.
+DISAGREEMENT_GAP = 0.4
 
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
