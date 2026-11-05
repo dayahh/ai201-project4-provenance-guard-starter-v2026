@@ -85,7 +85,9 @@ DISAGREEMENT_GAP = 0.4
 # that decide who pays for it.
 
 HUMAN_THRESHOLD = 0.35
-AI_THRESHOLD = 0.65
+# Unit 8 improvement: raised from 0.65. At 0.65, 6 of 8 false-positive attacks
+# and 3 of 10 pieces of my own writing were labelled AI. See README.
+AI_THRESHOLD = 0.85
 
 # ⚠️ One thing that catches people out in Milestone 5. A weighted average can
 # only land between its two inputs — so while `style_signal` is still the stub
